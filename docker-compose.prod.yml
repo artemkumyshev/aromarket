@@ -1,0 +1,169 @@
+# =============================================================================
+# Docker Compose for Production Environment
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: ${DATABASE_CONTAINER_NAME:-app-cms-db-prod}
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-app_cms}
+      POSTGRES_USER: ${DB_USER:-app_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-app_user} -d ${DB_NAME:-app_cms}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${DB_MEMORY_RESERVATION:-512M}
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend-production
+    container_name: ${BACKEND_CONTAINER_NAME:-app-cms-backend-prod}
+    restart: always
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${BACKEND_PORT:-3000}
+      DATABASE_URL: postgresql://${DB_USER:-app_user}:${DB_PASSWORD}@database:${DB_PORT:-5432}/${DB_NAME:-app_cms}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-${FRONTEND_URL:-http://localhost}}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SWAGGER_TITLE: ${SWAGGER_TITLE:-Fullstack Starter API}
+      SWAGGER_DESCRIPTION: ${SWAGGER_DESCRIPTION:-Fullstack Starter Template API Documentation}
+      SWAGGER_VERSION: ${SWAGGER_VERSION:-1.0}
+      SWAGGER_PATH: ${SWAGGER_PATH:-api/docs}
+      HEALTH_CHECK_PATH: ${HEALTH_CHECK_PATH:-/health}
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
+      resources:
+        limits:
+          memory: ${BACKEND_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${BACKEND_MEMORY_RESERVATION:-512M}
+
+  # Frontend (Nginx)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-production
+    container_name: ${FRONTEND_CONTAINER_NAME:-app-cms-frontend-prod}
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-localhost}
+      NGINX_BACKEND_HOST: ${NGINX_BACKEND_HOST:-backend}
+      NGINX_BACKEND_PORT: ${NGINX_BACKEND_PORT:-3000}
+      NGINX_SECURITY_CONTACT: ${NGINX_SECURITY_CONTACT:-artemkumyshev@gmail.com}
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-256M}
+        reservations:
+          memory: ${FRONTEND_MEMORY_RESERVATION:-128M}
+
+  # Load Balancer (HAProxy)
+  loadbalancer:
+    image: haproxy:2.8-alpine
+    container_name: ${LOADBALANCER_CONTAINER_NAME:-app-cms-lb}
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "${HAPROXY_PORT:-8080}:8080"
+      - "${HAPROXY_STATS_PORT:-9000}:9000"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # pgAdmin - PostgreSQL Administration Tool
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ${PGADMIN_CONTAINER_NAME:-app-cms-pgadmin-prod}
+    restart: always
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: ${PGADMIN_SERVER_MODE:-False}
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: ${PGADMIN_MASTER_PASSWORD_REQUIRED:-False}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/misc/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${PGADMIN_MEMORY_LIMIT:-512M}
+        reservations:
+          memory: ${PGADMIN_MEMORY_RESERVATION:-256M}
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
