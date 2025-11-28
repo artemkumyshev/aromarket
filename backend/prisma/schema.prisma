@@ -7,11 +7,49 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
+model Brand {
+  id        String   @id @default(cuid())
+  published Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  slug             String     @unique
+  title            String     @unique
+  description      String?
+  shortTitle       String?
+  shortDescription String?
+  type             BrandType? @default(MASS_MARKET)
+  countryCode      String?
+  sortOrder        Int?       @default(0)
+
+  image   Image?  @relation("BrandImage", fields: [imageId], references: [id])
+  imageId String? @unique
+
+  @@map("brand")
+}
+
+model Image {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  type     ImageType
+  url      String
+  parentId String
+
+  brand Brand? @relation("BrandImage")
+
+  @@map("image")
+}
+
+enum BrandType {
+  DESIGNER // люкс, модные дома
+  NICHE // нишевая
+  MASS_MARKET // масс-маркет
+  INDIE // независимые
+}
+
+enum ImageType {
+  PRODUCT
+  BRAND
 }
