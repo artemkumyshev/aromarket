@@ -1,12 +1,16 @@
 import 'dotenv/config';
+import { join } from 'path';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { AppModule } from './modules/app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { TransformInterceptor } from './shared/interceptors';
+import { HttpExceptionFilter } from './shared/filters';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
   app.useGlobalPipes(
@@ -16,11 +20,17 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
     }),
   );
+  app.setGlobalPrefix('api');
+  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // CORS Configuration
   const corsOrigin = configService.get<string>('CORS_ORIGIN', 'http://localhost:5173');
   const corsCredentials = configService.get<boolean>('CORS_CREDENTIALS', true);
-  
+
   app.enableCors({
     origin: corsOrigin === '*' ? true : corsOrigin.split(','),
     credentials: corsCredentials,
