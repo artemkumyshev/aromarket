@@ -4,8 +4,8 @@
 
 FROM node:18-alpine
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and wget for proper signal handling and health checks
+RUN apk add --no-cache dumb-init wget
 
 # Create app directory
 WORKDIR /app
@@ -14,7 +14,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY . .

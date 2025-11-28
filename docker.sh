@@ -42,7 +42,7 @@ check_docker() {
 dev_up() {
     print_info "Starting development environment..."
     check_docker
-    cp .env.development .env
+    cp .env.example .env
     docker-compose up -d
     print_success "Development environment started!"
     print_info "Frontend: http://localhost:5173"

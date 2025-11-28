@@ -15,7 +15,7 @@ WORKDIR /app/backend
 
 # Copy package files and install all dependencies (including dev) for the build
 COPY backend/package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy the rest of the backend source code
 COPY backend/ .
@@ -36,7 +36,7 @@ WORKDIR /app/frontend
 
 # Copy package files and install all dependencies (including dev) for the build
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy the rest of the frontend source code
 COPY frontend/ .
@@ -61,7 +61,7 @@ WORKDIR /app
 
 # Copy package.json and install production dependencies
 COPY backend/package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # Copy built application and prisma client
 COPY --from=backend-builder --chown=nestjs:nodejs /app/backend/dist ./dist

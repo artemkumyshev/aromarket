@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { ConfigModule } from '@nestjs/config';
       cache: true, // Cache environment variables for better performance
     }),
   ],
+  controllers: [HealthController],
   providers: [],
 })
 export class AppModule {}
